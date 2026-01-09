@@ -23,9 +23,23 @@ body {
   font-size: 2rem;
 }
 
-.header p {
+.subhead {
+  margin-top: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #fbfbf8;
+  border-radius: 12px;
+  border: 1px solid #e3e6dd;
+}
+
+.subhead p {
   margin: 0;
   color: #4b4b4b;
+}
+
+.attribution {
+  font-size: 0.9rem;
 }
 
 .repo-link {

@@ -7,13 +7,20 @@ app.innerHTML = `
   <main class="page">
     <header class="header">
       <h1>Gemeinde GeoJSON</h1>
-      <p>DuckDB-WASM + Parquet demo (Vite).</p>
-      <p>
-        Paste the output into
-        <a href="https://designer.topoprint.ch/pro.html" target="_blank" rel="noreferrer">
-          Topoprint Designer Pro
-        </a>.
-      </p>
+      <div class="subhead">
+        <p>
+          Type a Swiss community name and get the GeoJSON back from swissBOUNDARIES3D.
+        </p>
+        <p>
+          Paste the output into
+          <a href="https://designer.topoprint.ch/pro.html" target="_blank" rel="noreferrer">
+            Topoprint Designer Pro
+          </a>.
+        </p>
+        <p class="attribution">
+          Data source: swissBOUNDARIES3D (swisstopo).
+        </p>
+      </div>
       <a
         class="repo-link"
         href="https://github.com/ping13/ch-gemeinde-geojson"

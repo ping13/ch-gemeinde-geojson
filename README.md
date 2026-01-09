@@ -1,8 +1,11 @@
 # Gemeinde GeoJSON
 
-Small DuckDB-WASM + Parquet demo that extracts Swiss municipality geometries
-and exposes them in a simple Vite UI. The GeoJSON output can be pasted into
+Small DuckDB-WASM + Parquet demo that extracts Swiss municipality geometries.
+Type a Swiss community name and get the GeoJSON back from swissBOUNDARIES3D in
+a simple Vite UI. The GeoJSON output can be pasted into
 https://designer.topoprint.ch/pro.html for map layouts.
+
+Data source: swissBOUNDARIES3D (swisstopo).
 
 ## Project Structure
 - `Makefile` handles ETL steps and web tasks.
