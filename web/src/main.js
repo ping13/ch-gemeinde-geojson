@@ -14,6 +14,14 @@ app.innerHTML = `
           Topoprint Designer Pro
         </a>.
       </p>
+      <a
+        class="repo-link"
+        href="https://github.com/ping13/ch-gemeinde-geojson"
+        target="_blank"
+        rel="noreferrer"
+      >
+        View on GitHub
+      </a>
     </header>
     <section class="panel">
       <label class="field">
