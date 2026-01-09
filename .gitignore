@@ -1,0 +1,16 @@
+.DS_Store
+
+# Build artifacts
+/web/dist/
+
+# Dependency installs
+/web/node_modules/
+
+# Generated data artifacts
+/assets/*.zip
+/assets/*.gml
+/assets/*.gfs
+/assets/*.parquet
+/assets/gml_path.txt
+/assets/layer.txt
+/gemeinde.geojson
