@@ -64,7 +64,18 @@ app.innerHTML = `
     <section class="panel">
       <div class="panel-header">
         <h2>Output</h2>
-        <button id="copy" type="button" class="secondary">Copy</button>
+        <div class="panel-actions">
+          <button id="copy" type="button" class="secondary">Copy</button>
+          <a
+            id="open-designer"
+            class="secondary button-link"
+            href="https://designer.topoprint.ch/pro.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Designer Pro
+          </a>
+        </div>
       </div>
       <pre id="output">Ready.</pre>
       <div class="map-shell">
@@ -81,6 +92,7 @@ const input = document.querySelector('#gemeinde');
 const bufferInput = document.querySelector('#buffer');
 const simplifyInput = document.querySelector('#simplify');
 const copyButton = document.querySelector('#copy');
+const openDesignerLink = document.querySelector('#open-designer');
 const datalist = document.querySelector('#gemeinde-list');
 
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] };
@@ -113,6 +125,50 @@ const roundGeoJsonCoordinates = (node, decimals) => {
     return next;
   }
   return node;
+};
+
+const findFirstPolygonGeometry = (geojson) => {
+  if (!geojson) {
+    return null;
+  }
+  if (geojson.type === 'FeatureCollection') {
+    for (const feature of geojson.features || []) {
+      const geometry = findFirstPolygonGeometry(feature);
+      if (geometry) {
+        return geometry;
+      }
+    }
+    return null;
+  }
+  if (geojson.type === 'Feature') {
+    return findFirstPolygonGeometry(geojson.geometry);
+  }
+  if (geojson.type === 'Polygon' || geojson.type === 'MultiPolygon') {
+    return geojson;
+  }
+  return null;
+};
+
+const gzipToBase64 = async (text) => {
+  if (typeof CompressionStream === 'undefined') {
+    throw new Error('CompressionStream is not available in this browser.');
+  }
+  const encoded = new TextEncoder().encode(text);
+  const stream = new Blob([encoded]).stream().pipeThrough(
+    new CompressionStream('gzip')
+  );
+  const buffer = await new Response(stream).arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  return btoa(String.fromCharCode(...bytes));
+};
+
+const buildDesignerUrlFromGeometry = async (geometry) => {
+  const rounded = roundGeoJsonCoordinates(geometry, 5);
+  const json = JSON.stringify(rounded);
+  const base64 = await gzipToBase64(json);
+  return `https://designer.topoprint.ch/pro.html?polygon=${encodeURIComponent(
+    base64
+  )}`;
 };
 
 const collectCoordinates = (node, acc) => {
@@ -174,16 +230,16 @@ const ensureMap = () => {
   map.on('load', () => {
     mapLoaded = true;
     if (pendingGeoJson) {
-      updateMapData(pendingGeoJson);
+      updateMapData(pendingGeoJson.geojson, pendingGeoJson.boundsSource);
       pendingGeoJson = null;
     }
   });
 };
 
-const updateMapData = (geojson) => {
+const updateMapData = (geojson, boundsSource = geojson) => {
   ensureMap();
   if (!mapLoaded) {
-    pendingGeoJson = geojson;
+    pendingGeoJson = { geojson, boundsSource };
     return;
   }
 
@@ -212,7 +268,7 @@ const updateMapData = (geojson) => {
     });
   }
 
-  const bounds = getGeoJsonBounds(geojson);
+  const bounds = getGeoJsonBounds(boundsSource);
   if (bounds) {
     map.fitBounds(bounds, { padding: 24, maxZoom: 12, duration: 600 });
   }
@@ -403,15 +459,23 @@ runButton.addEventListener('click', async () => {
     if (!geojson) {
       output.textContent = `No match for "${name}".`;
       updateMapData(EMPTY_GEOJSON);
+      openDesignerLink.href = 'https://designer.topoprint.ch/pro.html';
     } else {
       try {
         const parsed = JSON.parse(geojson);
         const rounded = roundGeoJsonCoordinates(parsed, 5);
         output.textContent = JSON.stringify(rounded);
         updateMapData(rounded);
+        try {
+          openDesignerLink.href = await buildDesignerUrlFromGeometry(rounded);
+        } catch (encodeErr) {
+          openDesignerLink.href = 'https://designer.topoprint.ch/pro.html';
+          setStatus(`Share failed: ${encodeErr?.message || encodeErr}`);
+        }
       } catch (parseErr) {
         output.textContent = geojson;
         updateMapData(EMPTY_GEOJSON);
+        openDesignerLink.href = 'https://designer.topoprint.ch/pro.html';
       }
     }
     setStatus('Done.');
@@ -419,6 +483,7 @@ runButton.addEventListener('click', async () => {
     output.textContent = `Error: ${err?.message || err}`;
     setStatus('Failed.');
     updateMapData(EMPTY_GEOJSON);
+    openDesignerLink.href = 'https://designer.topoprint.ch/pro.html';
   }
 });
 
