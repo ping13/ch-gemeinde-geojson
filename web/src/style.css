@@ -89,6 +89,13 @@ body {
   margin-bottom: 16px;
 }
 
+.field-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+}
+
 input {
   padding: 10px 12px;
   font-size: 1rem;

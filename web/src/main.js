@@ -36,6 +36,23 @@ app.innerHTML = `
         <input id="gemeinde" list="gemeinde-list" placeholder="Zürich" value="Zürich" />
         <datalist id="gemeinde-list"></datalist>
       </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Buffer (meters)</span>
+          <input id="buffer" type="number" min="0" step="1" placeholder="0" value="0" />
+        </label>
+        <label class="field">
+          <span>Simplify tolerance (meters)</span>
+          <input
+            id="simplify"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="25"
+            value="25"
+          />
+        </label>
+      </div>
       <button id="run" type="button">Query</button>
       <p class="status" id="status">Idle.</p>
     </section>
@@ -53,8 +70,36 @@ const output = document.querySelector('#output');
 const status = document.querySelector('#status');
 const runButton = document.querySelector('#run');
 const input = document.querySelector('#gemeinde');
+const bufferInput = document.querySelector('#buffer');
+const simplifyInput = document.querySelector('#simplify');
 const copyButton = document.querySelector('#copy');
 const datalist = document.querySelector('#gemeinde-list');
+
+const roundToDecimals = (value, decimals) => {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+};
+
+const roundGeoJsonCoordinates = (node, decimals) => {
+  if (Array.isArray(node)) {
+    if (typeof node[0] === 'number') {
+      return node.map((value) => roundToDecimals(value, decimals));
+    }
+    return node.map((child) => roundGeoJsonCoordinates(child, decimals));
+  }
+  if (node && typeof node === 'object') {
+    const next = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'coordinates') {
+        next[key] = roundGeoJsonCoordinates(value, decimals);
+      } else {
+        next[key] = value;
+      }
+    }
+    return next;
+  }
+  return node;
+};
 
 const BUNDLES = {
   mvp: {
@@ -150,14 +195,54 @@ const loadSuggestions = async () => {
   setStatus('Ready.');
 };
 
-const fetchGeoJson = async (name) => {
+const fetchGeoJson = async (name, bufferMeters, simplifyTolerance) => {
   const stmt = await conn.prepare(
-    `SELECT ST_AsGeoJSON(geometry) AS geojson
-     FROM read_parquet('swissboundaries.parquet')
-     WHERE text = ?
-     LIMIT 1`
+    `WITH source AS (
+       SELECT geometry
+       FROM read_parquet('swissboundaries.parquet')
+       WHERE text = ?
+       LIMIT 1
+     ),
+     projected AS (
+       SELECT CASE
+         WHEN ABS(ST_X(ST_Centroid(geometry))) > 1000
+           OR ABS(ST_Y(ST_Centroid(geometry))) > 1000
+           THEN geometry
+         ELSE ST_Transform(geometry, 'EPSG:4326', 'EPSG:2056')
+       END AS geometry
+       FROM source
+     ),
+     buffered AS (
+       SELECT CASE
+         WHEN ? > 0 THEN ST_Buffer(geometry, ?)
+         ELSE geometry
+       END AS geometry
+       FROM projected
+     ),
+     simplified AS (
+       SELECT CASE
+         WHEN ? > 0 THEN ST_Simplify(geometry, ?)
+         ELSE geometry
+       END AS geometry
+       FROM buffered
+     )
+     SELECT ST_AsGeoJSON(
+       CASE
+         WHEN ABS(ST_X(ST_Centroid(geometry))) > 1000
+           OR ABS(ST_Y(ST_Centroid(geometry))) > 1000
+           THEN ST_Transform(geometry, 'EPSG:2056', 'EPSG:4326')
+         ELSE geometry
+       END
+     ) AS geojson
+     FROM simplified`
   );
-  const result = await stmt.query(name);
+  const result = await stmt.query(
+    name,
+    bufferMeters,
+    bufferMeters,
+    simplifyTolerance,
+    simplifyTolerance
+  );
   stmt.close();
 
   if (!result) {
@@ -178,15 +263,31 @@ runButton.addEventListener('click', async () => {
     return;
   }
 
+  const bufferMeters = Math.max(0, Number.parseFloat(bufferInput.value) || 0);
+  const simplifyTolerance = Math.max(
+    0,
+    Number.parseFloat(simplifyInput.value) || 0
+  );
+
   try {
     setStatus('Initializing...');
     await initDuckDb();
     setStatus('Querying...');
-    const geojson = await fetchGeoJson(name);
+    const geojson = await fetchGeoJson(
+      name,
+      bufferMeters,
+      simplifyTolerance
+    );
     if (!geojson) {
       output.textContent = `No match for "${name}".`;
     } else {
-      output.textContent = geojson;
+      try {
+        const parsed = JSON.parse(geojson);
+        const rounded = roundGeoJsonCoordinates(parsed, 5);
+        output.textContent = JSON.stringify(rounded);
+      } catch (parseErr) {
+        output.textContent = geojson;
+      }
     }
     setStatus('Done.');
   } catch (err) {
