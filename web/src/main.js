@@ -1,7 +1,12 @@
 import './style.css';
 import * as duckdb from '@duckdb/duckdb-wasm';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const app = document.querySelector('#app');
+
+const MAP_STYLE =
+  'https://vectortiles.geo.admin.ch/styles/ch.swisstopo.lightbasemap_world.vt/style.json?key=4OlyV2ifbjVSyzT2L1Yr';
 
 app.innerHTML = `
   <main class="page">
@@ -62,6 +67,9 @@ app.innerHTML = `
         <button id="copy" type="button" class="secondary">Copy</button>
       </div>
       <pre id="output">Ready.</pre>
+      <div class="map-shell">
+        <div id="map" class="map" aria-label="Map preview"></div>
+      </div>
     </section>
   </main>
 `;
@@ -74,6 +82,12 @@ const bufferInput = document.querySelector('#buffer');
 const simplifyInput = document.querySelector('#simplify');
 const copyButton = document.querySelector('#copy');
 const datalist = document.querySelector('#gemeinde-list');
+
+const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] };
+
+let map;
+let mapLoaded = false;
+let pendingGeoJson = null;
 
 const roundToDecimals = (value, decimals) => {
   const factor = 10 ** decimals;
@@ -99,6 +113,110 @@ const roundGeoJsonCoordinates = (node, decimals) => {
     return next;
   }
   return node;
+};
+
+const collectCoordinates = (node, acc) => {
+  if (!node) {
+    return;
+  }
+  if (node.type === 'FeatureCollection') {
+    node.features.forEach((feature) => collectCoordinates(feature, acc));
+    return;
+  }
+  if (node.type === 'Feature') {
+    collectCoordinates(node.geometry, acc);
+    return;
+  }
+  if (node.type && node.coordinates) {
+    acc.push(node.coordinates);
+    return;
+  }
+  if (Array.isArray(node)) {
+    acc.push(node);
+  }
+};
+
+const getGeoJsonBounds = (geojson) => {
+  const coordinates = [];
+  collectCoordinates(geojson, coordinates);
+  if (coordinates.length === 0) {
+    return null;
+  }
+
+  const bounds = new maplibregl.LngLatBounds();
+  let hasPoint = false;
+  const extend = (coords) => {
+    if (!Array.isArray(coords)) {
+      return;
+    }
+    if (typeof coords[0] === 'number') {
+      bounds.extend(coords);
+      hasPoint = true;
+      return;
+    }
+    coords.forEach(extend);
+  };
+  coordinates.forEach(extend);
+  return hasPoint ? bounds : null;
+};
+
+const ensureMap = () => {
+  if (map) {
+    return;
+  }
+  map = new maplibregl.Map({
+    container: 'map',
+    style: MAP_STYLE,
+    center: [8.23, 46.8],
+    zoom: 7,
+    attributionControl: true
+  });
+  map.on('load', () => {
+    mapLoaded = true;
+    if (pendingGeoJson) {
+      updateMapData(pendingGeoJson);
+      pendingGeoJson = null;
+    }
+  });
+};
+
+const updateMapData = (geojson) => {
+  ensureMap();
+  if (!mapLoaded) {
+    pendingGeoJson = geojson;
+    return;
+  }
+
+  const sourceId = 'gemeinde';
+  if (map.getSource(sourceId)) {
+    map.getSource(sourceId).setData(geojson);
+  } else {
+    map.addSource(sourceId, { type: 'geojson', data: geojson });
+    map.addLayer({
+      id: 'gemeinde-fill',
+      type: 'fill',
+      source: sourceId,
+      paint: {
+        'fill-color': '#2f6b52',
+        'fill-opacity': 0.35
+      }
+    });
+    map.addLayer({
+      id: 'gemeinde-outline',
+      type: 'line',
+      source: sourceId,
+      paint: {
+        'line-color': '#1b3f30',
+        'line-width': 2
+      }
+    });
+  }
+
+  const bounds = getGeoJsonBounds(geojson);
+  if (bounds) {
+    map.fitBounds(bounds, { padding: 24, maxZoom: 12, duration: 600 });
+  }
+  map.resize();
 };
 
 const BUNDLES = {
@@ -255,11 +373,15 @@ const fetchGeoJson = async (name, bufferMeters, simplifyTolerance) => {
   return rows[0].geojson;
 };
 
+ensureMap();
+updateMapData(EMPTY_GEOJSON);
+
 runButton.addEventListener('click', async () => {
   output.textContent = '';
   const name = input.value.trim();
   if (!name) {
     output.textContent = 'Please enter a Gemeinde name.';
+    updateMapData(EMPTY_GEOJSON);
     return;
   }
 
@@ -280,19 +402,23 @@ runButton.addEventListener('click', async () => {
     );
     if (!geojson) {
       output.textContent = `No match for "${name}".`;
+      updateMapData(EMPTY_GEOJSON);
     } else {
       try {
         const parsed = JSON.parse(geojson);
         const rounded = roundGeoJsonCoordinates(parsed, 5);
         output.textContent = JSON.stringify(rounded);
+        updateMapData(rounded);
       } catch (parseErr) {
         output.textContent = geojson;
+        updateMapData(EMPTY_GEOJSON);
       }
     }
     setStatus('Done.');
   } catch (err) {
     output.textContent = `Error: ${err?.message || err}`;
     setStatus('Failed.');
+    updateMapData(EMPTY_GEOJSON);
   }
 });
 

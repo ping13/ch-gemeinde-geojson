@@ -1,5 +1,7 @@
 # Gemeinde GeoJSON
 
+[GitHub Pages](https://ping13.github.io/ch-gemeinde-geojson/)
+
 Small DuckDB-WASM + Parquet demo that extracts Swiss municipality geometries.
 Type a Swiss community name and get the GeoJSON back from swissBOUNDARIES3D in
 a simple Vite UI. The GeoJSON output can be pasted into

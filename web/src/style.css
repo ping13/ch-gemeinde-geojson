@@ -127,6 +127,17 @@ pre {
   white-space: pre-wrap;
 }
 
+.map-shell {
+  margin-top: 12px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #d0d0c8;
+}
+
+.map {
+  height: 240px;
+}
+
 .status {
   margin: 8px 0 0;
   color: #2f6b52;
