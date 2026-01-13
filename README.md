@@ -12,6 +12,20 @@ Data source: swissBOUNDARIES3D (swisstopo).
 - `assets/` stores source GML/ZIP and generated parquet files.
 - `web/` is the Vite frontend (`web/src/`, `web/public/`).
 
+## Architecture Diagrams
+The architecture centers on a small ETL workflow that downloads swisstopo GML,
+converts it into optimized parquet assets, and serves those assets to a Vite
+web app. In the browser, DuckDB-WASM queries the parquet files locally so users
+can retrieve GeoJSON by municipality name without a backend service.
+
+![Architecture diagram](docs/diagrams/architecture.png)
+
+Deployment-wise, the ETL runs on a developer workstation, parquet assets are
+copied into the web bundle, and the static site is deployed to GitHub Pages.
+Users load the app in their browser and query the parquet assets client-side.
+
+![Deployment diagram](docs/diagrams/deployment.png)
+
 ## Quick Start
 ```sh
 make parquet

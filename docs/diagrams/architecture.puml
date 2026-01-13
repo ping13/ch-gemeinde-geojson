@@ -1,0 +1,28 @@
+@startuml
+!include <C4/C4_Container>
+
+LAYOUT_LANDSCAPE()
+left to right direction
+
+Person(user, "Visitor", "Looks up a Swiss municipality and gets GeoJSON.")
+Person(dev, "Developer", "Runs ETL and exports single Gemeinde GeoJSON.")
+
+System_Ext(swisstopo, "swisstopo swissBOUNDARIES3D", "GML source data from data.geo.admin.ch.")
+
+System_Boundary(gemeinde, "Gemeinde GeoJSON") {
+  Container(etl, "ETL Scripts", "Make + ogr2ogr + shell", "Downloads GML, builds parquet, and exports GeoJSON.")
+  Container(parquet, "Parquet Assets", "Parquet files", "Optimized municipality geometry dataset.")
+  Container(web, "Vite Web App", "Vite + JS", "UI to search municipalities and display GeoJSON output.")
+  Container(duckdb, "DuckDB WASM", "DuckDB-WASM", "Runs local SQL queries in the browser.")
+}
+
+Rel(dev, etl, "Runs", "make / shell")
+Rel(etl, swisstopo, "Downloads", "HTTPS")
+Rel(etl, parquet, "Builds", "Parquet")
+Rel(dev, parquet, "Uses for one-off export", "gemeinde_json.sh")
+Rel(user, web, "Uses")
+Rel(web, duckdb, "Queries", "WASM API")
+Rel(duckdb, parquet, "Reads", "Parquet files")
+Rel(web, parquet, "Fetches", "HTTP (static assets)")
+
+@enduml

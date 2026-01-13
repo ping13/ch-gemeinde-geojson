@@ -1,0 +1,37 @@
+@startuml
+!include <C4/C4_Deployment>
+
+LAYOUT_LANDSCAPE()
+left to right direction
+
+Person(user, "Visitor", "Queries municipalities from a browser.")
+Person(dev, "Developer", "Builds ETL outputs and deploys the web app.")
+
+System_Ext(swisstopo, "swisstopo swissBOUNDARIES3D", "Public GML download service.")
+
+Deployment_Node(dev_pc, "Developer Workstation", "macOS / Linux") {
+  Container(etl, "ETL Scripts", "Make + ogr2ogr + shell", "Builds parquet and GeoJSON outputs.")
+  Container(store, "Local Assets", "Filesystem", "GML + parquet artifacts in assets/.")
+}
+
+Deployment_Node(github, "GitHub Pages", "Static hosting") {
+  Container(site, "Web Bundle", "Vite build", "Static HTML/CSS/JS for the UI.")
+  Container(parquet, "Parquet Assets", "Parquet files", "Copied into web/public/assets/.")
+}
+
+Deployment_Node(browser, "User Browser", "Desktop/Mobile") {
+  Container(web, "Vite Web App", "JS", "Runs the UI.")
+  Container(duckdb, "DuckDB WASM", "DuckDB-WASM", "Executes SQL over parquet in-browser.")
+}
+
+Rel(dev, etl, "Runs")
+Rel(etl, swisstopo, "Downloads", "HTTPS")
+Rel(etl, store, "Writes", "Files")
+Rel(dev_pc, github, "Publishes", "git push + GitHub Actions")
+Rel(user, web, "Uses")
+Rel(web, site, "Fetches", "HTTPS")
+Rel(web, parquet, "Fetches", "HTTPS")
+Rel(web, duckdb, "Queries", "WASM API")
+Rel(duckdb, parquet, "Reads", "Parquet files")
+
+@enduml
